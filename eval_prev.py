@@ -13,37 +13,39 @@ import cv2
 import models.CDCNs as CDCNs
 import os
 #paths for evaluation sources
-test_target_csv = "C:/Users/Admin/OneDrive/face_anti_spoofing/data/nuaa/test.csv"
-test_images_path = "C:/Users/Admin/OneDrive/face_anti_spoofing/data/nuaa/test_all_fin"
+test_target_csv = r"data\nuaa\val.csv"
+test_images_path = r"data\nuaa\images"
 
 #this section is for loading the model
 model = CDCNs.CDCNpp()
-model_main = torch.load()
-model.load_state_dict(model_main['state_dict'])
+model_main = torch.load("experiments/CDCNpp_nuaa_360.pth", map_location=torch.device('cpu'))
+# model.load_state_dict(model_main['state_dict'])
+model.load_state_dict(model_main['state_dict'], strict=False)
 #make it compatible with cuda, adn in eval mode for evaluation
 # Send the model to the GPU 
-model.cuda()
+# model.cuda()
 # Set layers such as dropout and batchnorm in evaluation mode
 model.eval()
 
 def pred_im(test_image):
     path = os.path.join(test_images_path, os.path.basename(test_image))
     image = cv2.imread(path)
-    print("image opened")
+    # print("image opened")
     #transform the face and transpose for it to be usable in the from_numpy
     data_transform = transforms.Compose([transforms.Resize((256, 256)), transforms.ToTensor()])
     image = image.transpose(2,1,0)
-    image = torch.from_numpy(image).float().unsqueeze(0).cuda(0)
+    # image = torch.from_numpy(image).float().unsqueeze(0).cuda(0)
+    image = torch.from_numpy(image).float().unsqueeze(0)
     #after the image is in the proper form, it is loaded to the CDCNN model for output
     outputs = model(image)
     #torch.no_grad() is used to prevent errors from clashes 
     #and only output's [0] tuple part used out of the 6 since that 
     #part is the depth map which is the wanted output.
     with torch.no_grad():
-            #only the x and y axis are used since depth is only 1 
-            #by taking the mean of the depth map, the result of genuineness is found
-            score = torch.mean(outputs[0], axis=(1,2))
-            print(score)
+        #only the x and y axis are used since depth is only 1 
+        #by taking the mean of the depth map, the result of genuineness is found
+        score = torch.mean(outputs[0], axis=(1,2))
+        print(score)
             
     #if the resulting score is bigger than 0.6 it is genuine otherwise it is fake       
     if score >= 0.6:
@@ -77,29 +79,30 @@ def confusion(prediction, truth):
 #create the target tensor by reading from the csv directly
 target_list = list(csv.reader(open(test_target_csv)))
 target_tensor = torch.tensor([int(target_list[i][1]) for i in range(len(target_list))])
-print(target_tensor)
+# print(target_tensor)
 
 pred_labels = []
 #for every element in csv, search the photos to find it
 #when found, use pred_img function to decide if it is a 0 or 1 and append to list
 for im in target_list:
-    print("im name", im)
+    # print("im name", im)
     for cur_im in os.listdir(test_images_path):
         cur_im = "images/" + cur_im
         #if names same, do prediction and add to tensor
         if cur_im == im[0]:
-            print("add")
+            # print("add")
             label_0or1 = pred_im(im[0])
-            print(label_0or1)
+            # print(label_0or1)
     try:       
         pred_labels.append(label_0or1)  
     except:
         continue
 
 pred_tensor = torch.tensor(pred_labels)
-print(pred_tensor)
+# print(pred_tensor)
 #assign the outputs to proper variables     
 TP, FP, TN, FN = confusion(pred_tensor, target_tensor)
+print(confusion(pred_tensor, target_tensor))
 #calculate the evaluation metrics using the formulas
 APCER = FP / (TN + FP)
 BPCER = FN/(FN + TP)
