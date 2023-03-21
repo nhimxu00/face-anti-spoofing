@@ -1,0 +1,8 @@
+opencv-python
+future
+tensorboard
+torch
+torchvision
+pandas
+pillow
+pyyaml
